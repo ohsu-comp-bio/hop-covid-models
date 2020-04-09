@@ -1,0 +1,6 @@
+dash==1.10.0
+matplotlib
+pandas
+tqdm
+networkx
+scipy
