@@ -4,3 +4,4 @@ pandas
 tqdm
 networkx
 scipy
+numpy

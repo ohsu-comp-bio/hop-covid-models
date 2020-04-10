@@ -11,6 +11,9 @@ import dash_html_components as html
 import threading
 from datetime import datetime as dt
 
+from plotly.subplots import make_subplots
+import plotly.graph_objects as go
+
 app = dash.Dash('Covide On/Off Modeling')
 
 threadLock = threading.Lock()
@@ -42,6 +45,36 @@ app.layout = html.Div(children=[
     ),
     html.Div(children=[
         html.P([
+            html.Label("Infection Start %: "),
+            dcc.Input(
+                id='infection-start',
+                type="number",
+                min=0.0,
+                max=1.0,
+                step=0.002,
+                value=0.002)
+        ]),
+        html.P([
+            html.Label("Incubation Days: "),
+            dcc.Input(
+                id='incubation-days',
+                type="number",
+                min=1,
+                max=30,
+                step=1,
+                value=3)
+        ]),
+        html.P([
+            html.Label("Infectious Days: "),
+            dcc.Input(
+                id='infectious-days',
+                type="number",
+                min=1,
+                max=30,
+                step=1,
+                value=4)
+        ]),
+        html.P([
             html.Div(id='lockdown-slider-output-container'),
             dcc.RangeSlider(
                 id='lockdown-slider',
@@ -56,10 +89,10 @@ app.layout = html.Div(children=[
             dcc.Slider(
                 id='rw-slider',
                 min=0,
-                max=5.0,
+                max=7.0,
                 step=0.05,
                 value=2.3,
-                updatemode="drag"
+                updatemode="mouseup"
             )
         ]),
         html.P([
@@ -70,7 +103,7 @@ app.layout = html.Div(children=[
                 max=5.0,
                 step=0.05,
                 value=1.3,
-                updatemode="drag"
+                updatemode="mouseup"
             )
         ])
     ], style={"width":'200px'}),
@@ -99,12 +132,15 @@ def update_rl_output(value):
 @app.callback(
     dash.dependencies.Output('Graph1', 'figure'),
     [
+        dash.dependencies.Input('infection-start', 'value'),
+        dash.dependencies.Input('incubation-days', 'value'),
+        dash.dependencies.Input('infectious-days', 'value'),
         dash.dependencies.Input('rw-slider', 'value'),
         dash.dependencies.Input('rl-slider', 'value'),
         dash.dependencies.Input('lockdown-slider', 'value')
     ])
 
-def update_graph_output(rwValue, rlValue, lockdownValue):
+def update_graph_output(startI, Tinc, Tinf, rwValue, rlValue, lockdownValue):
     lockdown = lockdownValue[0]
     period = lockdownValue[1]
     if lockdown == 0:
@@ -112,28 +148,38 @@ def update_graph_output(rwValue, rlValue, lockdownValue):
     else:
         rfunc = lambda t:  rlValue-(rlValue-rwValue)*((int(t)%period) < lockdown)
 
-    tmax = 30*4
+    tmax = 30*6
     t = np.linspace(1,tmax,tmax)
-    config = {'Tinc': 3, 'Tinf': 4, 'beta': 0.25, 'gamma': 0.25}
-    INIT_SUSCEPTIBLE = 0.002
-    SEIR_y0 = [1-INIT_SUSCEPTIBLE,INIT_SUSCEPTIBLE/2,INIT_SUSCEPTIBLE/2,0]
+    config = {'Tinc': Tinc, 'Tinf': Tinf, 'beta': 0.25, 'gamma': 0.25}
+    SEIR_y0 = [1-startI,startI/2,startI/2,0]
 
     # odeint gets angry is multiple server threads try to do the calculation at the same time
     threadLock.acquire()
     modelOutput = odeint(SEIR_model, SEIR_y0, t, args=(config,rfunc), atol=1e-12, rtol=1e-12)
     threadLock.release()
 
-    return {
-        'data': [
-            {'x': t, 'y': modelOutput[:,0], 'type': 'line', 'name': 'Susceptible'},
-            {'x': t, 'y': modelOutput[:,1], 'type': 'line', 'name': 'Exposed'},
-            {'x': t, 'y': modelOutput[:,2], 'type': 'line', 'name': 'Infected'},
-            {'x': t, 'y': modelOutput[:,3], 'type': 'line', 'name': 'Resistant'},
-        ],
-        'layout': {
-            'title': 'Model'
-        }
-    }
+
+    fig = make_subplots(rows=4, cols=1,
+                        shared_xaxes=True,
+                        vertical_spacing=0.08,
+                        subplot_titles=("Susceptible","Exposed", "Infected", "Resistant"))
+
+
+    fig.add_trace(go.Scatter(x=t, y=modelOutput[:,0]),
+                  row=1, col=1)
+
+    fig.add_trace(go.Scatter(x=t, y=modelOutput[:,1]),
+                  row=2, col=1)
+
+    fig.add_trace(go.Scatter(x=t, y=modelOutput[:,2]),
+                  row=3, col=1)
+
+    fig.add_trace(go.Scatter(x=t, y=modelOutput[:,3]),
+                  row=4, col=1)
+
+    fig.update_layout(height=600, width=800,
+                      title_text="Projection (Days)")
+    return fig
 
 
 if __name__ == '__main__':
