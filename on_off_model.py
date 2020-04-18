@@ -1,20 +1,20 @@
-#!/usr/bin/env python
 
 import numpy as np
 from scipy.integrate import odeint
+import threading
 
 import dash
 from dash.dependencies import Input, Output
 import dash_core_components as dcc
 import dash_html_components as html
 
-import threading
+from app import app
+
 from datetime import datetime as dt
 
 from plotly.subplots import make_subplots
 import plotly.graph_objects as go
 
-app = dash.Dash('Covide On/Off Modeling')
 
 threadLock = threading.Lock()
 
@@ -36,7 +36,7 @@ def SEIR_model(y,t,config,rfunc):
     return dydt
 
 
-app.layout = html.Div(children=[
+OnOffModel = html.Div(children=[
     html.H1(
         children='COVID On/Off Modeling',
         style={
@@ -180,7 +180,3 @@ def update_graph_output(startI, Tinc, Tinf, rwValue, rlValue, lockdownValue):
     fig.update_layout(height=600, width=800,
                       title_text="Projection (Days)")
     return fig
-
-
-if __name__ == '__main__':
-    app.run_server()
